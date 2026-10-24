@@ -37,6 +37,9 @@ jobs:
     name: Krita ${{ github.event.inputs.krita_version || github.ref_name }} arm64
     runs-on: windows-11-arm
     timeout-minutes: 350
+    defaults:
+      run:
+        shell: msys2 {0}
 
     steps:
       - uses: actions/checkout@v4
