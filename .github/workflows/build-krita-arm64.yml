@@ -1,0 +1,181 @@
+name: Build Krita (Windows ARM64)
+
+# Native arm64 Krita, built on GitHub's ARM64 Windows runner against the
+# MSYS2 CLANGARM64 toolchain (Qt6 + KF6 come prebuilt from the MSYS2 repo, so
+# only Krita itself is compiled here).
+
+on:
+  workflow_dispatch:
+    inputs:
+      krita_version:
+        description: "Krita version to build (patches in ci/patches are for 6.0.4.1)"
+        required: true
+        default: "6.0.4.1"
+      create_release:
+        description: "Publish a GitHub Release with the packaged zip"
+        type: boolean
+        default: true
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: build-arm64-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  CHERE_INVOKING: "1"
+  MSYSTEM: CLANGARM64
+  # KDE's official release tarballs
+  KDE_BASE: https://download.kde.org/stable/krita
+
+jobs:
+  build:
+    name: Krita ${{ github.event.inputs.krita_version || github.ref_name }} arm64
+    runs-on: windows-11-arm
+    timeout-minutes: 350
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Resolve version
+        id: ver
+        shell: bash
+        run: |
+          set -euo pipefail
+          V="${{ github.event.inputs.krita_version }}"
+          if [ -z "${V:-}" ]; then V="${GITHUB_REF_NAME#v}"; fi
+          echo "version=$V" >> "$GITHUB_OUTPUT"
+          echo "Building Krita $V for Windows ARM64"
+
+      - name: Set up MSYS2 CLANGARM64
+        uses: msys2/setup-msys2@v2
+        with:
+          msystem: CLANGARM64
+          update: false
+          install: >-
+            git
+            patch
+            zip
+            unzip
+            tar
+            curl
+          pacboy: >-
+            cc:p
+            cmake:p
+            ninja:p
+            pkgconf:p
+            qt6-base:p
+            qt6-svg:p
+            qt6-declarative:p
+            qt6-5compat:p
+            qt6-tools:p
+            qt6-imageformats:p
+            angleproject:p
+            extra-cmake-modules:p
+            kdoctools:p
+            kconfig:p
+            kcoreaddons:p
+            kcrash:p
+            kcolorscheme:p
+            kcompletion:p
+            kguiaddons:p
+            ki18n:p
+            kitemviews:p
+            kitemmodels:p
+            kwidgetsaddons:p
+            kimageformats:p
+            zlib:p
+            libpng:p
+            libjpeg-turbo:p
+            libtiff:p
+            libwebp:p
+            libjxl:p
+            openjpeg2:p
+            giflib:p
+            libheif:p
+            imath:p
+            openexr:p
+            lcms2:p
+            exiv2:p
+            fftw:p
+            fontconfig:p
+            freetype:p
+            fribidi:p
+            harfbuzz:p
+            gsl:p
+            libmypaint:p
+            libunibreak:p
+            opencolorio:p
+            poppler-qt6:p
+            quazip:p
+            kseexpr:p
+            lager:p
+            zug:p
+            immer:p
+            xsimd:p
+            eigen3:p
+            boost:p
+            python:p
+            python-pyqt6:p
+            sip:p
+            mlt:p
+            ffmpeg:p
+            icoutils:p
+            hicolor-icon-theme:p
+
+      - name: Toolchain report
+        run: |
+          set -euo pipefail
+          echo "MSYSTEM=$MSYSTEM  prefix=$MINGW_PREFIX"
+          uname -a
+          clang --version | head -2
+          cmake --version | head -1
+          ninja --version
+          qmake6 --version || true
+          pkg-config --modversion Qt6Core KF6CoreAddons
+
+      - name: Build Krita ${{ steps.ver.outputs.version }}
+        run: |
+          set -euo pipefail
+          ./ci/build-krita.sh "${{ steps.ver.outputs.version }}"
+
+      - name: Package portable app
+        id: package
+        run: |
+          set -euo pipefail
+          ./ci/package-portable.sh "${{ steps.ver.outputs.version }}"
+          ls -lh dist/
+
+      - name: Smoke test
+        continue-on-error: true
+        run: |
+          set -uo pipefail
+          APP="dist/Krita-${{ steps.ver.outputs.version }}-arm64"
+          echo "--- file check"; ls "$APP/bin" | head -20
+          echo "--- krita --version"
+          timeout 180 "$APP/bin/krita.exe" --version || echo "[warn] version probe returned $?"
+          echo "--- PE machine type"
+          objdump -f "$APP/bin/krita.exe" | head -5
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: krita-${{ steps.ver.outputs.version }}-windows-arm64
+          path: dist/*.zip
+          compression-level: 0
+          retention-days: 30
+
+      - name: Publish release
+        if: ${{ github.event.inputs.create_release == 'true' || startsWith(github.ref, 'refs/tags/') }}
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ steps.ver.outputs.version }}-arm64
+          name: Krita ${{ steps.ver.outputs.version }} (native Windows ARM64)
+          body_path: ci/release-notes.md
+          files: dist/*.zip
+          fail_on_unmatched_files: true
+          make_latest: true
