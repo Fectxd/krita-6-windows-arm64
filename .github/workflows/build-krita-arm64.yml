@@ -64,7 +64,7 @@ jobs:
             tar
             curl
           pacboy: >-
-            cc:p
+            clang:p
             cmake:p
             ninja:p
             pkgconf:p
@@ -136,7 +136,7 @@ jobs:
           cmake --version | head -1
           ninja --version
           qmake6 --version || true
-          pkg-config --modversion Qt6Core KF6CoreAddons
+          pkg-config --modversion Qt6Core KF6CoreAddons || true
 
       - name: Build Krita ${{ steps.ver.outputs.version }}
         run: |
