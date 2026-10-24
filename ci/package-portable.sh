@@ -16,7 +16,7 @@ APPNAME="Krita-$VERSION-arm64"
 APP="$OUT/$APPNAME"
 ZIP="$OUT/krita-$VERSION-windows-arm64.zip"
 
-step() { printf '\n\033[36m==> %s\033[0m\n' "$*"; }
+step() { printf '\n\033[36m==> [%s] %s\033[0m\n' "$(date -u +%H:%M:%S)" "$*"; }
 ok()   { printf '    \033[32m[ok]\033[0m %s\n' "$*"; }
 warn() { printf '    \033[33m[!]\033[0m %s\n' "$*"; }
 

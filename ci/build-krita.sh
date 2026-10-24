@@ -27,7 +27,7 @@ declare -A KNOWN_SHA256=(
   ["6.0.4.1"]="bd0568754417ffca0ef60448d1cc7fb153658af1fb9796f027fa7e69b69098df"
 )
 
-step() { printf '\n\033[36m==> %s\033[0m\n' "$*"; }
+step() { printf '\n\033[36m==> [%s] %s\033[0m\n' "$(date -u +%H:%M:%S)" "$*"; }
 ok()   { printf '    \033[32m[ok]\033[0m %s\n' "$*"; }
 warn() { printf '    \033[33m[!]\033[0m %s\n' "$*"; }
 
@@ -66,6 +66,12 @@ for p in "$REPO_ROOT"/ci/patches/*.patch; do
   fi
 done
 
+CACHE_ARGS=()
+if command -v ccache >/dev/null 2>&1; then
+  CACHE_ARGS+=("-DCMAKE_C_COMPILER_LAUNCHER=ccache" "-DCMAKE_CXX_COMPILER_LAUNCHER=ccache")
+  ok "ccache enabled"
+fi
+
 step "Configuring (Release, Qt6, no tests)"
 rm -rf "$BUILD"
 cmake -GNinja \
@@ -78,7 +84,8 @@ cmake -GNinja \
   -DALLOW_UNSTABLE=QT6 \
   -DENABLE_UPDATERS=OFF \
   -DPython_EXECUTABLE="$(cygpath -m "$MINGW_PREFIX/bin/python")" \
-  -DCMAKE_INSTALL_DATAROOTDIR=share
+  -DCMAKE_INSTALL_DATAROOTDIR=share \
+  "${CACHE_ARGS[@]}"
 
 step "Compiling Krita with $JOBS jobs"
 cmake --build "$BUILD" --parallel "$JOBS"

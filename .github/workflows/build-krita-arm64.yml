@@ -29,6 +29,11 @@ concurrency:
 env:
   CHERE_INVOKING: "1"
   MSYSTEM: CLANGARM64
+  # lets repeated runs reuse compiled objects instead of recompiling Krita
+  CCACHE_DIR: ${{ github.workspace }}/work/ccache
+  CCACHE_MAXSIZE: 3G
+  CCACHE_COMPRESS: "1"
+  CCACHE_COMPRESSLEVEL: "1"
   # KDE's official release tarballs
   KDE_BASE: https://download.kde.org/stable/krita
 
@@ -71,6 +76,7 @@ jobs:
             clang:p
             cmake:p
             ninja:p
+            ccache:p
             pkgconf:p
             qt6-base:p
             qt6-svg:p
@@ -130,6 +136,15 @@ jobs:
             ffmpeg:p
             icoutils:p
             hicolor-icon-theme:p
+
+      - name: Restore ccache
+        uses: actions/cache@v4
+        with:
+          path: work/ccache
+          key: ccache-${{ runner.os }}-${{ steps.ver.outputs.version }}-${{ github.run_id }}
+          restore-keys: |
+            ccache-${{ runner.os }}-${{ steps.ver.outputs.version }}-
+            ccache-${{ runner.os }}-
 
       - name: Toolchain report
         run: |
