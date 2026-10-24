@@ -56,30 +56,39 @@ done
 ok "plugin categories copied"
 
 step "Collecting transitive MSYS2 DLL dependencies"
+# Read the PE import tables with objdump instead of ldd: ldd has to load every
+# DLL, which takes seconds per file on arm64, whereas objdump just parses the
+# import directory (milliseconds).
+OBJDUMP="$(command -v objdump || command -v llvm-objdump || true)"
+[[ -n "$OBJDUMP" ]] || { echo "no objdump/llvm-objdump available" >&2; exit 1; }
+
 declare -A SEEN=()
 QUEUE=()
 while IFS= read -r f; do QUEUE+=("$f"); done \
-  < <(find "$APP" -type f \( -iname '*.exe' -o -iname '*.dll' \) | sort)
+  < <(find "$APP" -type f \( -iname '*.exe' -o -iname '*.dll' -o -iname '*.pyd' \) | sort)
 
 copied=0
 idx=0
 while [[ $idx -lt ${#QUEUE[@]} ]]; do
   f="${QUEUE[$idx]}"; idx=$((idx + 1))
-  while IFS= read -r dep; do
-    [[ -n "$dep" ]] || continue
-    case "$dep" in
-      "$MINGW_PREFIX"/*) ;;
-      *) continue ;;                 # C:/Windows/... system DLL
-    esac
-    base="$(basename "$dep")"
-    [[ -n "${SEEN[$base]:-}" ]] && continue
-    SEEN[$base]=1
+  while IFS= read -r want; do
+    want="${want%$'\r'}"
+    [[ -n "$want" ]] || continue
+    key="${want,,}"
+    [[ -n "${SEEN[$key]:-}" ]] && continue
+    SEEN[$key]=1
+    src="$MINGW_PREFIX/bin/$want"
+    if [[ ! -f "$src" ]]; then
+      src="$(find "$MINGW_PREFIX/bin" -maxdepth 1 -iname "$want" -print -quit 2>/dev/null || true)"
+    fi
+    [[ -n "$src" && -f "$src" ]] || continue
+    base="$(basename "$src")"
     if [[ ! -f "$APP/bin/$base" ]]; then
-      cp -f "$dep" "$APP/bin/"
+      cp -f "$src" "$APP/bin/"
       copied=$((copied + 1))
     fi
     QUEUE+=("$APP/bin/$base")
-  done < <(ldd "$f" 2>/dev/null | awk '{print $3}' | grep '^/' || true)
+  done < <("$OBJDUMP" -p "$f" 2>/dev/null | awk '/DLL Name:/ {print $3}')
 done
 ok "$copied runtime DLL(s) added from $MINGW_PREFIX"
 

@@ -66,6 +66,7 @@ jobs:
             unzip
             tar
             curl
+            binutils
           pacboy: >-
             clang:p
             cmake:p
@@ -162,7 +163,7 @@ jobs:
           echo "--- krita --version"
           timeout 180 "$APP/bin/krita.exe" --version || echo "[warn] version probe returned $?"
           echo "--- PE machine type"
-          objdump -f "$APP/bin/krita.exe" | head -5
+          (objdump -f "$APP/bin/krita.exe" || llvm-objdump -f "$APP/bin/krita.exe") | head -5
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
